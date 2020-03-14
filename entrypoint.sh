@@ -1,28 +1,31 @@
 #!/bin/sh
 set -o pipefail
 
+# Limit incoming traffic to SSH_SUBNET on port SSHD_PORT
+[ "${SSH_SUBNET}" != "" -a "${SSHD_PORT}" != "" ] && \
+  iptables -A INPUT -s "${SSH_SUBNET}" -p tcp --dport "${SSHD_PORT}" -j ACCEPT && \
+  iptables -A OUTPUT -d "${SSH_SUBNET}" -p tcp --sport "${SSHD_PORT}" -m state --state ESTABLISHED -j ACCEPT
+
+# Allow access to certain networks listed in SSH_ACCESSIBLE_NETWORKS
+[ "${SSH_ACCESSIBLE_NETWORKS}" != "" ] && \
+  echo "${SSH_ACCESSIBLE_NETWORKS}"|sed 's/|/\n/g'|while read n; do
+    iptables -A OUTPUT -d "${n}" -j ACCEPT
+    iptables -A INPUT -s "${n}" -m state --state ESTABLISHED -j ACCEPT
+  done
+
+# Apply DROP policies to any other network traffic
+iptables -P OUTPUT DROP
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+
 # Create login user
-[ "${SSH_USER}" != "" ] && [ "${SSH_HASH}" != "" ] && \
+[ "${SSH_USER}" != "" -a "${SSH_HASH}" != "" ] && \
   adduser -S -h /home/"${SSH_USER}" -s "/bin/zsh" "${SSH_USER}" && \
   echo "${SSH_USER}:${SSH_HASH}"|chpasswd -e
 
 # Retrieve own IP address
 [ "${SSH_SUBNET}" != "" ] && \
-  ipaddr=$(ip route|grep '^'"${SSHD_SUBNET}"|sed 's/[[:space:]]/\n/g;'|sed '/^[[:space:]]\{0,\}$/d'|tail -n 1)
-
-# Restrict connections only from SSHD_SUBNET
-iptables -A INPUT -p tcp --dport "${SSHD_PORT}" --source "${SSHD_SUBNET}" -j ACCEPT
-iptables -A INPUT -j DROP
-
-# Allow access to certain networks
-if [ "${SSH_ACCESSIBLE_NETWORKS}" != "" ]; then
-  echo "${SSH_ACCESSIBLE_NETWORKS}"|sed 's/|/\n/g'|while read n; do
-    iptables -A OUTPUT -d "${n}" -j ACCEPT
-  done
-fi
-
-# Deny access to any other network
-iptables -A OUTPUT -j DROP
+  ipaddr=$(ip route|grep '^'"${SSH_SUBNET}"|sed 's/[[:space:]]/\n/g;'|sed '/^[[:space:]]\{0,\}$/d'|tail -n 1)
 
 # Export hostkey and IP address to /root/.ssh/known_hosts
 mkdir -p /root/.ssh && chmod 700 /root/.ssh
@@ -31,8 +34,8 @@ echo "$(hostname) ${hostkey}">/root/.ssh/known_hosts
 [ "${ipaddr}" != "" ] && \
   echo "${ipaddr} ${hostkey}">>/root/.ssh/known_hosts
 
-# Make it public if directory /webconsole is writeable
-# and create an appropriate .sh file for the ssh command
+# Make /root/.ssh/known_hosts public if directory /webconsole is
+# writeable and create an appropriate .sh file for the ssh command
 [ -w /webconsole ] && \
   cp /root/.ssh/known_hosts /webconsole/$(hostname).hostkey && \
   echo "${ipaddr} $(hostname)" > /webconsole/$(hostname).hosts && \
