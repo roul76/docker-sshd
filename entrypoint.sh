@@ -6,6 +6,16 @@ set -o pipefail
   iptables -A INPUT -s "${SSH_SUBNET}" -p tcp --dport "${SSHD_PORT}" -j ACCEPT && \
   iptables -A OUTPUT -d "${SSH_SUBNET}" -p tcp --sport "${SSHD_PORT}" -m state --state ESTABLISHED -j ACCEPT
 
+# Set IPv4 nameservers if provided
+[ "${SSH_NAMESERVERS}" != "" ] && \
+  echo "${SSH_NAMESERVERS}"|sed 's/|/\n/g'|while read n; do
+    echo "nameserver ${n}" >> /etc/resolv.conf
+    iptables -A OUTPUT -p udp -d "${n}/32" --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+    iptables -A INPUT  -p udp -s "${n}/32" --sport 53 -m state --state ESTABLISHED -j ACCEPT
+    iptables -A OUTPUT -p tcp -d "${n}/32" --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+    iptables -A INPUT  -p tcp -s "${n}/32" --sport 53 -m state --state ESTABLISHED -j ACCEPT
+  done
+
 # Allow access to certain networks listed in SSH_ACCESSIBLE_NETWORKS
 [ "${SSH_ACCESSIBLE_NETWORKS}" != "" ] && \
   echo "${SSH_ACCESSIBLE_NETWORKS}"|sed 's/|/\n/g'|while read n; do
@@ -41,6 +51,7 @@ echo "$(hostname) ${hostkey}">/root/.ssh/known_hosts
   echo "${ipaddr} $(hostname)" > /webconsole/$(hostname).hosts && \
   echo -e "#!/bin/sh\nssh -p ${SSHD_PORT} ${SSH_USER}@$(hostname)">/webconsole/$(hostname).sh && \
   chmod 755 /webconsole/$(hostname).sh
+
 
 unset SSH_USER
 unset SSH_HASH
