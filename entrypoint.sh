@@ -29,9 +29,38 @@ iptables -P INPUT DROP
 iptables -P FORWARD DROP
 
 # Create login user
+[ "${SSH_USER_ID}" = "" ] && SSH_USER_ID=1001
 [ "${SSH_USER}" != "" -a "${SSH_HASH}" != "" ] && \
-  adduser -S -h /home/"${SSH_USER}" -s "/bin/zsh" "${SSH_USER}" && \
-  echo "${SSH_USER}:${SSH_HASH}"|chpasswd -e
+  addgroup -g "${SSH_USER_ID}" webconsole && \
+  adduser -u "${SSH_USER_ID}" -G "${SSH_USER_ID}" -S -h /home/"${SSH_USER}" -s "/bin/zsh" "${SSH_USER}" && \
+  echo "${SSH_USER}:${SSH_HASH}"|chpasswd -e && \
+  touch "/home/${SSH_USER}/.zshrc" && \
+  chown "${SSH_USER}" "/home/${SSH_USER}/.zshrc" && \
+  chmod 640 "/home/${SSH_USER}/.zshrc" && \
+  echo '
+HISTFILE=~/.histfile
+HISTSIZE=10000
+SAVEHIST=10000
+bindkey -e
+zstyle :compinstall filename '"'"'/home/'"${SSH_USER}"'/.zshrc'"'"'
+autoload -Uz compinit && compinit
+autoload -U colors && colors
+PROMPT="%{$fg[blue]%}%D %T%{$reset_color%} %{$fg[yellow]%}%B%d%b%{$reset_color%}
+$ "
+alias ls='"'"'ls --color'"'"'
+alias l='"'"'ls -lah'"'"'
+alias la='"'"'ls -lAh'"'"'
+alias ll='"'"'ls -lh'"'"'
+alias lsa='"'"'ls -lah'"'"'
+alias md='"'"'mkdir -p'"'"'
+alias rd='"'"'rmdir'"'"'
+'>>"/home/${SSH_USER}/.zshrc"
+
+# Create SSH keys
+[ "$(find "${SSH_KEY_DIRECTORY}/" -name "*.key*" -type f 2>/dev/null)" != "" ] && \
+  echo "echo "'"'"
+*** SSH key files stored in ${SSH_KEY_DIRECTORY} ***
+"'"'>>"/home/${SSH_USER}/.zshrc"
 
 # Retrieve own IP address
 [ "${SSH_SUBNET}" != "" ] && \
@@ -55,5 +84,6 @@ echo "$(hostname) ${hostkey}">/root/.ssh/known_hosts
 
 unset SSH_USER
 unset SSH_HASH
+unset SSH_PASSPHRASE_BASE64
 
 exec "$@"
