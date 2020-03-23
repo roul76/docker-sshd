@@ -32,7 +32,7 @@ iptables -P FORWARD DROP
 [ "${SSH_USER_ID}" = "" ] && SSH_USER_ID=1001
 [ "${SSH_USER}" != "" -a "${SSH_HASH}" != "" ] && \
   addgroup -g "${SSH_USER_ID}" webconsole && \
-  adduser -u "${SSH_USER_ID}" -G "${SSH_USER_ID}" -S -h /home/"${SSH_USER}" -s "/bin/zsh" "${SSH_USER}" && \
+  adduser -u "${SSH_USER_ID}" -G webconsole -S -h /home/"${SSH_USER}" -s "/bin/zsh" "${SSH_USER}" && \
   echo "${SSH_USER}:${SSH_HASH}"|chpasswd -e && \
   touch "/home/${SSH_USER}/.zshrc" && \
   chown "${SSH_USER}" "/home/${SSH_USER}/.zshrc" && \

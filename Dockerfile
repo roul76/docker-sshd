@@ -1,4 +1,5 @@
 FROM alpine:3.10
+LABEL maintainer="https://github.com/roul76"
 
 ENV SSHD_PORT=7576 \
     NOTVISIBLE="in users profile"
